@@ -1,0 +1,181 @@
+.wt-overlay {
+  position: fixed;
+  z-index: 2147483647;
+  box-sizing: border-box;
+  max-height: 280px;
+  padding: 12px 14px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+
+.wt-overlay.wt-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.wt-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.wt-overlay-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.wt-close-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+  color: #9ca3af;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.wt-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #374151;
+}
+
+.wt-source {
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.wt-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.wt-status {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.wt-status.wt-skeleton {
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: wt-shimmer 1.2s infinite;
+  border-radius: 4px;
+  height: 18px;
+  width: 80px;
+}
+
+@keyframes wt-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.wt-translation {
+  font-size: 15px;
+  font-weight: 500;
+  color: #111827;
+  word-break: break-word;
+  overflow-y: auto;
+  max-height: 120px;
+}
+
+.wt-translation.wt-error {
+  color: #dc2626;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.wt-examples {
+  margin-top: 10px;
+  overflow-y: auto;
+  max-height: 100px;
+}
+
+.wt-example {
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.wt-example-source {
+  color: #4b5563;
+  margin-bottom: 2px;
+}
+
+.wt-example-target {
+  color: #1d4ed8;
+  font-weight: 500;
+}
+
+.wt-arrow {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.wt-arrow.wt-arrow-top {
+  top: -7px;
+  border-bottom: none;
+  border-right: none;
+}
+
+.wt-arrow.wt-arrow-bottom {
+  bottom: -7px;
+  border-top: none;
+  border-left: none;
+}
+
+.wt-login-link {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .wt-overlay {
+    color: #f3f4f6;
+    background: rgba(31, 41, 55, 0.92);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .wt-source { color: #9ca3af; }
+  .wt-translation { color: #f9fafb; }
+  .wt-example { background: rgba(59, 130, 246, 0.15); }
+  .wt-example-source { color: #d1d5db; }
+  .wt-example-target { color: #93c5fd; }
+  .wt-arrow { background: rgba(31, 41, 55, 0.92); border-color: rgba(255, 255, 255, 0.1); }
+}

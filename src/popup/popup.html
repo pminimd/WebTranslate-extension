@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Translate</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #1f2937;
+      background: #fff;
+    }
+    .header {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .header p {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .body { padding: 16px; }
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+    }
+    .status-dot.connected { background: #22c55e; }
+    .status-dot.connecting,
+    .status-dot.reconnecting { background: #f59e0b; }
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: #3b82f6; }
+    button {
+      width: 100%;
+      padding: 9px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      background: #3b82f6;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.secondary {
+      background: #f3f4f6;
+      color: #374151;
+      margin-top: 8px;
+    }
+    button.secondary:hover { background: #e5e7eb; }
+    .error {
+      color: #dc2626;
+      font-size: 12px;
+      margin-bottom: 8px;
+      display: none;
+    }
+    .error.visible { display: block; }
+    .logged-in { display: none; }
+    .logged-in.visible { display: block; }
+    .login-form.hidden { display: none; }
+    .user-email {
+      font-weight: 500;
+      color: #111827;
+      margin-bottom: 12px;
+    }
+    .hint {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+      font-size: 11px;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+    kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      font-size: 10px;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Web Translate</h1>
+    <p>选中即译</p>
+  </div>
+  <div class="body">
+    <div class="status-bar">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">未连接</span>
+    </div>
+
+    <div class="logged-in" id="loggedInView">
+      <div class="user-email" id="userEmail"></div>
+
+      <label for="targetLang">目标语言</label>
+      <select id="targetLang">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="ja">日本語</option>
+        <option value="ko">한국어</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+      </select>
+
+      <label for="serverUrl">服务器地址</label>
+      <input type="url" id="serverUrl" placeholder="http://localhost:8080" />
+
+      <button class="secondary" id="logoutBtn">退出登录</button>
+    </div>
+
+    <form class="login-form" id="loginForm">
+      <div class="error" id="loginError"></div>
+
+      <label for="email">邮箱</label>
+      <input type="email" id="email" required autocomplete="email" />
+
+      <label for="password">密码</label>
+      <input type="password" id="password" required autocomplete="current-password" />
+
+      <label for="serverUrlLogin">服务器地址</label>
+      <input type="url" id="serverUrlLogin" placeholder="http://localhost:8080" />
+
+      <button type="submit" id="loginBtn">登录</button>
+    </form>
+
+    <div class="hint">
+      选中文本后点击「翻译」按钮，或按 <kbd>Alt</kbd>+<kbd>T</kbd> 快捷键翻译。
+    </div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
