@@ -15,6 +15,7 @@ import {
   REQUEST_TIMEOUT_MS,
   wsUrl,
 } from '../shared/config.js';
+import { validateServerUrl } from '../shared/server-url.js';
 import {
   clearTokens,
   getAccessToken,
@@ -48,6 +49,10 @@ export class WebSocketClient {
   private pendingQueue: Array<{ message: ClientMessage; handler: RequestHandler }> = [];
   private activeHandlers = new Map<string, RequestHandler>();
   private statusListeners = new Set<(s: ConnectionStatus) => void>();
+  private connectInFlight: Promise<boolean> | null = null;
+  private intentionalClose = false;
+  private wsAuthenticated = false;
+  private connectSettle: ((ok: boolean) => void) | null = null;
 
   onStatusChange(listener: (s: ConnectionStatus) => void): () => void {
     this.statusListeners.add(listener);
@@ -59,51 +64,123 @@ export class WebSocketClient {
     return this.status;
   }
 
-  async connect(): Promise<void> {
-    if (this.status === 'connected' || this.status === 'connecting') return;
+  async connect(): Promise<boolean> {
+    if (this.status === 'connected' && this.wsAuthenticated && this.ws?.readyState === WebSocket.OPEN) {
+      return true;
+    }
+    if (this.connectInFlight) {
+      return this.connectInFlight;
+    }
 
     const token = await getAccessToken();
     if (!token) {
       this.setStatus('disconnected');
-      return;
+      return false;
     }
 
-    const settings = await getSettings();
-    this.setStatus('connecting');
-
+    this.connectInFlight = this.openConnection();
     try {
-      const url = wsUrl(settings.serverUrl, token);
-      this.ws = new WebSocket(url);
-
-      this.ws.onopen = () => {
-        this.reconnectAttempt = 0;
-        this.setStatus('connected');
-        this.startHeartbeat();
-        this.flushQueue();
-      };
-
-      this.ws.onmessage = (event) => this.handleMessage(event.data as string);
-
-      this.ws.onclose = () => {
-        this.cleanupSocket();
-        this.scheduleReconnect();
-      };
-
-      this.ws.onerror = () => {
-        this.ws?.close();
-      };
-    } catch {
-      this.setStatus('disconnected');
-      this.scheduleReconnect();
+      return await this.connectInFlight;
+    } finally {
+      this.connectInFlight = null;
     }
+  }
+
+  /** Wait until WebSocket is connected or timeout. */
+  async ensureConnected(timeoutMs = 8_000): Promise<boolean> {
+    if (this.status === 'connected' && this.wsAuthenticated && this.ws?.readyState === WebSocket.OPEN) {
+      return true;
+    }
+
+    void this.connect();
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.status === 'connected' && this.wsAuthenticated && this.ws?.readyState === WebSocket.OPEN) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return this.status === 'connected' && this.wsAuthenticated && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  private openConnection(): Promise<boolean> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        this.connectSettle = null;
+        resolve(ok);
+      };
+      this.connectSettle = settle;
+      this.wsAuthenticated = false;
+
+      void (async () => {
+        const token = await getAccessToken();
+        if (!token) {
+          this.setStatus('disconnected');
+          settle(false);
+          return;
+        }
+
+        const settings = await getSettings();
+        const serverCheck = validateServerUrl(settings.serverUrl);
+        if (!serverCheck.ok) {
+          this.setStatus('disconnected');
+          settle(false);
+          return;
+        }
+
+        this.setStatus('connecting');
+
+        try {
+          const ws = new WebSocket(wsUrl(serverCheck.normalized));
+          this.ws = ws;
+
+          ws.onopen = () => {
+            ws.send(
+              JSON.stringify({
+                id: 'auth',
+                type: 'auth',
+                payload: { accessToken: token },
+              } satisfies ClientMessage)
+            );
+          };
+
+          ws.onmessage = (event) => this.handleMessage(event.data as string);
+
+          ws.onclose = () => {
+            this.cleanupSocket();
+            if (!settled) {
+              this.setStatus('disconnected');
+              settle(false);
+            }
+            if (!this.intentionalClose) {
+              this.scheduleReconnect();
+            }
+          };
+
+          ws.onerror = () => {
+            ws.close();
+          };
+        } catch {
+          this.setStatus('disconnected');
+          settle(false);
+        }
+      })();
+    });
   }
 
   disconnect(): void {
     this.cancelReconnect();
     this.stopHeartbeat();
+    this.intentionalClose = true;
+    this.connectSettle?.(false);
+    this.connectSettle = null;
     this.ws?.close();
     this.cleanupSocket();
     this.setStatus('disconnected');
+    this.intentionalClose = false;
   }
 
   async translate(
@@ -129,7 +206,7 @@ export class WebSocketClient {
 
     const message: ClientMessage = { id: requestId, type: 'translate', payload };
 
-    if (this.status === 'connected' && this.ws?.readyState === WebSocket.OPEN) {
+    if (this.status === 'connected' && this.wsAuthenticated && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
       if (this.pendingQueue.length >= MAX_PENDING_REQUESTS) {
@@ -162,7 +239,19 @@ export class WebSocketClient {
       return;
     }
 
-    if (msg.type === 'pong' || msg.type === 'connected') return;
+    if (msg.type === 'pong') return;
+
+    if (msg.type === 'connected') {
+      if (!this.wsAuthenticated) {
+        this.wsAuthenticated = true;
+        this.reconnectAttempt = 0;
+        this.setStatus('connected');
+        this.startHeartbeat();
+        this.flushQueue();
+        this.connectSettle?.(true);
+      }
+      return;
+    }
 
     if (msg.type === 'auth_expired') {
       void this.handleAuthExpired();
@@ -216,9 +305,14 @@ export class WebSocketClient {
 
     onUpdate({ requestId, status: 'loading' });
     const settings = await getSettings();
+    const serverUrl = resolveServerUrl(settings.serverUrl);
+    if (!serverUrl) {
+      onUpdate({ requestId, status: 'error', error: '服务器地址无效或未授权' });
+      return;
+    }
 
     try {
-      const res = await fetch(apiUrl(settings.serverUrl, '/api/v1/translate'), {
+      const res = await fetch(apiUrl(serverUrl, '/api/v1/translate'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -229,6 +323,26 @@ export class WebSocketClient {
 
       if (res.status === 401) {
         onUpdate({ requestId, status: 'auth_required', error: '登录已过期' });
+        return;
+      }
+
+      if (res.status === 429) {
+        const body = await res.json().catch(() => ({}));
+        onUpdate({
+          requestId,
+          status: 'error',
+          error: (body as { message?: string }).message ?? '用量已达上限',
+        });
+        return;
+      }
+
+      if (res.status === 403) {
+        const body = await res.json().catch(() => ({}));
+        onUpdate({
+          requestId,
+          status: 'error',
+          error: (body as { message?: string }).message ?? '无权限',
+        });
         return;
       }
 
@@ -277,6 +391,7 @@ export class WebSocketClient {
   private cleanupSocket(): void {
     this.stopHeartbeat();
     this.ws = null;
+    this.wsAuthenticated = false;
   }
 
   private scheduleReconnect(): void {
@@ -312,8 +427,16 @@ export class WebSocketClient {
     }
 
     const settings = await getSettings();
+    const serverUrl = resolveServerUrl(settings.serverUrl);
+    if (!serverUrl) {
+      await clearTokens();
+      this.disconnect();
+      this.notifyAuthRequired();
+      return;
+    }
+
     try {
-      const res = await fetch(apiUrl(settings.serverUrl, '/api/v1/auth/refresh'), {
+      const res = await fetch(apiUrl(serverUrl, '/api/v1/auth/refresh'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -361,10 +484,34 @@ export class WebSocketClient {
   }
 }
 
-export async function login(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+async function saveAuthFromResponse(data: {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  email?: string;
+}): Promise<void> {
+  await setTokens({
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    expiresAt: Date.now() + data.expiresIn * 1000,
+  });
+
+  if (data.email) {
+    await chrome.storage.local.set({ user_email: data.email });
+  }
+}
+
+export async function login(
+  email: string,
+  password: string
+): Promise<{ success: boolean; error?: string; code?: string }> {
   const settings = await getSettings();
+  const serverUrl = resolveServerUrl(settings.serverUrl);
+  if (!serverUrl) {
+    return { success: false, error: '服务器地址无效或未授权' };
+  }
   try {
-    const res = await fetch(apiUrl(settings.serverUrl, '/api/v1/auth/login'), {
+    const res = await fetch(apiUrl(serverUrl, '/api/v1/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -372,7 +519,11 @@ export async function login(email: string, password: string): Promise<{ success:
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      return { success: false, error: (body as { message?: string }).message ?? '登录失败' };
+      return {
+        success: false,
+        error: (body as { message?: string }).message ?? '登录失败',
+        code: (body as { code?: string }).code,
+      };
     }
 
     const data = (await res.json()) as {
@@ -382,17 +533,90 @@ export async function login(email: string, password: string): Promise<{ success:
       email?: string;
     };
 
-    await setTokens({
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      expiresAt: Date.now() + data.expiresIn * 1000,
-    });
+    await saveAuthFromResponse(data);
+    return { success: true };
+  } catch {
+    return { success: false, error: '无法连接服务器' };
+  }
+}
 
-    if (data.email) {
-      await chrome.storage.local.set({ user_email: data.email });
+export async function register(
+  email: string,
+  password: string,
+  referralCode?: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  code?: string;
+  needsVerification?: boolean;
+  email?: string;
+}> {
+  const settings = await getSettings();
+  const serverUrl = resolveServerUrl(settings.serverUrl);
+  if (!serverUrl) {
+    return { success: false, error: '服务器地址无效或未授权' };
+  }
+  try {
+    const body: Record<string, string> = { email, password };
+    if (referralCode?.trim()) {
+      body.referral_code = referralCode.trim();
     }
 
-    return { success: true };
+    const res = await fetch(apiUrl(serverUrl, '/api/v1/register'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        error: (data as { message?: string }).message ?? '注册失败',
+        code: (data as { code?: string }).code,
+      };
+    }
+
+    const data = (await res.json()) as {
+      needs_verification?: boolean;
+      user?: { email?: string };
+    };
+
+    return {
+      success: true,
+      needsVerification: data.needs_verification ?? true,
+      email: data.user?.email ?? email,
+    };
+  } catch {
+    return { success: false, error: '无法连接服务器' };
+  }
+}
+
+export async function resendVerification(
+  email: string
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const settings = await getSettings();
+  const serverUrl = resolveServerUrl(settings.serverUrl);
+  if (!serverUrl) {
+    return { success: false, error: '服务器地址无效或未授权' };
+  }
+  try {
+    const res = await fetch(apiUrl(serverUrl, '/api/v1/resend-verification'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        error: (data as { message?: string }).message ?? '发送失败',
+      };
+    }
+
+    const data = (await res.json()) as { message?: string };
+    return { success: true, message: data.message };
   } catch {
     return { success: false, error: '无法连接服务器' };
   }
@@ -404,8 +628,11 @@ export async function ensureValidToken(): Promise<boolean> {
   if (!isTokenExpired(tokens)) return true;
 
   const settings = await getSettings();
+  const serverUrl = resolveServerUrl(settings.serverUrl);
+  if (!serverUrl) return false;
+
   try {
-    const res = await fetch(apiUrl(settings.serverUrl, '/api/v1/auth/refresh'), {
+    const res = await fetch(apiUrl(serverUrl, '/api/v1/auth/refresh'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: tokens.refreshToken }),
@@ -422,4 +649,9 @@ export async function ensureValidToken(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function resolveServerUrl(serverUrl: string): string | null {
+  const result = validateServerUrl(serverUrl);
+  return result.ok ? result.normalized : null;
 }

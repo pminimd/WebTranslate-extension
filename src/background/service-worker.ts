@@ -1,6 +1,8 @@
 import type { RuntimeMessage } from '../shared/types.js';
 import { clearTokens, getAccessToken, getSettings, getTokens } from '../shared/auth.js';
-import { ensureValidToken, login, WebSocketClient } from './websocket-client.js';
+import { isContentScriptSender, isExtensionPageSender } from './message-auth.js';
+import { ensureContentScript, sendToTab } from './tab-utils.js';
+import { ensureValidToken, login, register, resendVerification, WebSocketClient } from './websocket-client.js';
 
 const wsClient = new WebSocketClient();
 
@@ -27,7 +29,7 @@ async function initConnection(): Promise<void> {
 }
 
 function pushToTab(tabId: number, message: RuntimeMessage): void {
-  chrome.tabs.sendMessage(tabId, message).catch(() => {});
+  void sendToTab(tabId, message).catch(() => {});
 }
 
 function handleTranslationUpdate(
@@ -65,34 +67,34 @@ async function handleTranslate(
 
   const payload = { text, targetLang };
 
-  if (wsClient.getStatus() === 'connected') {
+  const connected = await wsClient.ensureConnected(8_000);
+  if (connected) {
     await wsClient.translate(requestId, payload, tabId, onUpdate);
   } else {
-    await wsClient.connect();
-    if (wsClient.getStatus() === 'connected') {
-      await wsClient.translate(requestId, payload, tabId, onUpdate);
-    } else {
-      await wsClient.translateViaRest(requestId, payload, onUpdate);
-      stopKeepAlive();
-    }
+    await wsClient.translateViaRest(requestId, payload, onUpdate);
+    stopKeepAlive();
   }
 }
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
   switch (message.type) {
     case 'TRANSLATE':
+      if (!isContentScriptSender(sender)) return false;
       void handleTranslate(message.requestId, message.text, message.targetLang, sender);
       return false;
 
     case 'CANCEL':
+      if (!isContentScriptSender(sender)) return false;
       wsClient.cancelRequest(message.requestId);
       return false;
 
     case 'GET_CONNECTION_STATUS':
+      if (!isExtensionPageSender(sender)) return false;
       sendResponse({ type: 'CONNECTION_STATUS', status: wsClient.getStatus() } satisfies RuntimeMessage);
       return false;
 
     case 'GET_AUTH_STATUS':
+      if (!isExtensionPageSender(sender)) return false;
       void (async () => {
         const tokens = await getTokens();
         const stored = await chrome.storage.local.get('user_email');
@@ -105,6 +107,7 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       return true;
 
     case 'LOGIN':
+      if (!isExtensionPageSender(sender)) return false;
       void (async () => {
         const result = await login(message.email, message.password);
         if (result.success) {
@@ -114,7 +117,24 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
       })();
       return true;
 
+    case 'REGISTER':
+      if (!isExtensionPageSender(sender)) return false;
+      void (async () => {
+        const result = await register(message.email, message.password, message.referralCode);
+        sendResponse({ type: 'REGISTER_RESULT', ...result } satisfies RuntimeMessage);
+      })();
+      return true;
+
+    case 'RESEND_VERIFICATION':
+      if (!isExtensionPageSender(sender)) return false;
+      void (async () => {
+        const result = await resendVerification(message.email);
+        sendResponse({ type: 'RESEND_VERIFICATION_RESULT', ...result } satisfies RuntimeMessage);
+      })();
+      return true;
+
     case 'LOGOUT':
+      if (!isExtensionPageSender(sender)) return false;
       void (async () => {
         wsClient.disconnect();
         await clearTokens();
@@ -131,8 +151,12 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
 chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'translate-selection') return;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'TRIGGER_TRANSLATE' }).catch(() => {});
+  if (!tab?.id) return;
+
+  const ok = await sendToTab(tab.id, { type: 'TRIGGER_TRANSLATE' });
+  if (!ok) {
+    await ensureContentScript(tab.id);
+    await sendToTab(tab.id, { type: 'TRIGGER_TRANSLATE' });
   }
 });
 

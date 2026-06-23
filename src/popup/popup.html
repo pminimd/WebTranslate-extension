@@ -85,6 +85,29 @@
       margin-top: 8px;
     }
     button.secondary:hover { background: #e5e7eb; }
+    button.link {
+      width: auto;
+      padding: 0;
+      margin-top: 10px;
+      background: none;
+      color: #3b82f6;
+      font-weight: 400;
+      font-size: 12px;
+    }
+    button.link:hover { background: none; text-decoration: underline; }
+    .auth-form.hidden { display: none; }
+    .success-msg {
+      color: #16a34a;
+      font-size: 12px;
+      margin-bottom: 8px;
+      display: none;
+      line-height: 1.5;
+    }
+    .success-msg.visible { display: block; }
+    .verify-pending { display: none; text-align: center; }
+    .verify-pending.visible { display: block; }
+    .verify-pending p { color: #6b7280; font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+    .verify-email { font-weight: 500; color: #111827; word-break: break-all; }
     .error {
       color: #dc2626;
       font-size: 12px;
@@ -94,7 +117,6 @@
     .error.visible { display: block; }
     .logged-in { display: none; }
     .logged-in.visible { display: block; }
-    .login-form.hidden { display: none; }
     .user-email {
       font-weight: 500;
       color: #111827;
@@ -148,7 +170,7 @@
       <button class="secondary" id="logoutBtn">退出登录</button>
     </div>
 
-    <form class="login-form" id="loginForm">
+    <form class="login-form auth-form" id="loginForm">
       <div class="error" id="loginError"></div>
 
       <label for="email">邮箱</label>
@@ -161,7 +183,36 @@
       <input type="url" id="serverUrlLogin" placeholder="http://localhost:8080" />
 
       <button type="submit" id="loginBtn">登录</button>
+      <button type="button" class="link" id="showRegisterBtn">没有帐号？注册</button>
     </form>
+
+    <form class="auth-form hidden" id="registerForm">
+      <div class="error" id="registerError"></div>
+
+      <label for="registerEmail">邮箱</label>
+      <input type="email" id="registerEmail" required autocomplete="email" />
+
+      <label for="registerPassword">密码</label>
+      <input type="password" id="registerPassword" required minlength="6" autocomplete="new-password" />
+
+      <label for="referralCode">邀请码（选填）</label>
+      <input type="text" id="referralCode" autocomplete="off" placeholder="如有邀请码请填写" />
+
+      <label for="serverUrlRegister">服务器地址</label>
+      <input type="url" id="serverUrlRegister" placeholder="http://localhost:8080" />
+
+      <button type="submit" id="registerBtn">注册</button>
+      <button type="button" class="link" id="showLoginBtn">已有帐号？登录</button>
+    </form>
+
+    <div class="verify-pending" id="verifyPendingView">
+      <p>验证邮件已发送至<br /><span class="verify-email" id="verifyPendingEmail"></span></p>
+      <p>请点击邮件中的链接完成验证，然后登录使用。</p>
+      <div class="success-msg" id="resendSuccess"></div>
+      <div class="error" id="resendError"></div>
+      <button type="button" id="resendBtn">重新发送验证邮件</button>
+      <button type="button" class="link" id="backToLoginBtn">返回登录</button>
+    </div>
 
     <div class="hint">
       选中文本后点击「翻译」按钮，或按 <kbd>Alt</kbd>+<kbd>T</kbd> 快捷键翻译。

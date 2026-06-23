@@ -1,5 +1,6 @@
 import type { AuthTokens, UserSettings } from './types.js';
 import { DEFAULT_SETTINGS } from './config.js';
+import { validateServerUrl } from './server-url.js';
 
 const TOKENS_KEY = 'auth_tokens';
 const SETTINGS_KEY = 'user_settings';
@@ -25,6 +26,15 @@ export async function getSettings(): Promise<UserSettings> {
 export async function saveSettings(partial: Partial<UserSettings>): Promise<UserSettings> {
   const current = await getSettings();
   const next = { ...current, ...partial };
+
+  if (partial.serverUrl !== undefined) {
+    const validated = validateServerUrl(partial.serverUrl);
+    if (!validated.ok) {
+      throw new Error(validated.error);
+    }
+    next.serverUrl = validated.normalized;
+  }
+
   await chrome.storage.local.set({ [SETTINGS_KEY]: next });
   return next;
 }

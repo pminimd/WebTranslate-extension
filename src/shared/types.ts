@@ -1,6 +1,10 @@
 /** WebSocket & REST message types — shared with server contract (see docs/DESIGN.md) */
 
-export type ClientMessageType = 'translate' | 'ping' | 'cancel';
+export type ClientMessageType = 'translate' | 'ping' | 'cancel' | 'auth';
+
+export interface AuthPayload {
+  accessToken: string;
+}
 
 export interface TranslatePayload {
   text: string;
@@ -12,7 +16,7 @@ export interface TranslatePayload {
 export interface ClientMessage {
   id: string;
   type: ClientMessageType;
-  payload?: TranslatePayload;
+  payload?: TranslatePayload | AuthPayload;
 }
 
 export type ServerMessageType =
@@ -49,6 +53,8 @@ export type RuntimeMessage =
   | { type: 'CANCEL'; requestId: string }
   | { type: 'GET_CONNECTION_STATUS' }
   | { type: 'LOGIN'; email: string; password: string }
+  | { type: 'REGISTER'; email: string; password: string; referralCode?: string }
+  | { type: 'RESEND_VERIFICATION'; email: string }
   | { type: 'LOGOUT' }
   | { type: 'GET_AUTH_STATUS' }
   | {
@@ -61,7 +67,16 @@ export type RuntimeMessage =
     }
   | { type: 'CONNECTION_STATUS'; status: ConnectionStatus }
   | { type: 'AUTH_STATUS'; isAuthenticated: boolean; email?: string }
-  | { type: 'LOGIN_RESULT'; success: boolean; error?: string };
+  | { type: 'LOGIN_RESULT'; success: boolean; error?: string; code?: string }
+  | {
+      type: 'REGISTER_RESULT';
+      success: boolean;
+      error?: string;
+      code?: string;
+      needsVerification?: boolean;
+      email?: string;
+    }
+  | { type: 'RESEND_VERIFICATION_RESULT'; success: boolean; message?: string; error?: string };
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 

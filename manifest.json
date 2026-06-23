@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Web Translate",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "选中即译 — 快速翻译网页文本",
   "icons": {
     "16": "icons/icon16.png",
@@ -28,7 +28,7 @@
       "run_at": "document_idle"
     }
   ],
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "scripting"],
   "host_permissions": ["http://localhost:8080/*", "https://*/*"],
   "commands": {
     "translate-selection": {
