@@ -2,7 +2,7 @@
 
 在网页上选中文字，一点就译。
 
-[官网](https://la-yee.com) · 当前版本 **v0.1.1**
+[官网](https://la-yee.com) · 当前版本 **v0.1.2**
 
 Web Translate 是一款浏览器翻译插件，支持 Chrome 和 Edge。选中文字后，旁边会出现「翻译」按钮，译文直接显示在页面上，不用切标签、不用复制粘贴。
 
@@ -172,7 +172,14 @@ extension/
 
 ## 发布安装包
 
-在 GitHub Release 中附带 `web-translate-vX.X.X.zip`（内容为 `dist/` 目录），供普通用户直接解压安装。建议通过 CI 从 tag 自动构建，保证与源码一致。
+推送版本 tag 后，GitHub Actions 会自动构建并发布安装包：
+
+```bash
+git tag v0.1.2
+git push origin v0.1.2
+```
+
+Release 中会附带 **`web-translate-vX.X.X.zip`**，解压后得到 `web-translate/` 文件夹，按上方「安装插件」步骤加载即可。
 
 ## 参与贡献
 

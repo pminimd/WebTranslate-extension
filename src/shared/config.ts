@@ -3,7 +3,7 @@ import { validateServerUrl } from './server-url.js';
 
 export const DEFAULT_SETTINGS: UserSettings = {
   targetLang: 'zh',
-  serverUrl: 'http://localhost:8080',
+  serverUrl: 'https://api.la-yee.com',
   autoShowTrigger: true,
 };
 
