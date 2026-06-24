@@ -12,7 +12,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
  * When non-empty, only listed HTTPS hosts (plus localhost) are accepted.
  * Leave empty to allow any HTTPS host for self-hosted deployments.
  */
-export const ALLOWED_SERVER_HOSTS: readonly string[] = [];
+export const ALLOWED_SERVER_HOSTS: readonly string[] = [
+  'api.la-yee.com',
+];
 
 export function wsUrl(serverUrl: string): string {
   const validated = validateServerUrl(serverUrl);
