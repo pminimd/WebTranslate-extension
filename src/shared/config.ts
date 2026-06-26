@@ -1,6 +1,12 @@
 import type { UserSettings } from './types.js';
 import { validateServerUrl } from './server-url.js';
 
+export const OFFICIAL_SITE_URL = 'http://www.la-yee.com';
+
+export function buildReferralShareText(referralCode: string): string {
+  return `注册 LA-YEE Web Translate 时填写我的邀请码：${referralCode}\n官网：${OFFICIAL_SITE_URL}`;
+}
+
 export const DEFAULT_SETTINGS: UserSettings = {
   targetLang: 'zh',
   serverUrl: 'https://api.la-yee.com',

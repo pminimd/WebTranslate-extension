@@ -5,6 +5,7 @@ import type {
   ServerMessage,
   TranslationExample,
   TranslatePayload,
+  UserProfile,
 } from '../shared/types.js';
 import {
   apiUrl,
@@ -617,6 +618,48 @@ export async function resendVerification(
 
     const data = (await res.json()) as { message?: string };
     return { success: true, message: data.message };
+  } catch {
+    return { success: false, error: '无法连接服务器' };
+  }
+}
+
+export async function fetchUserProfile(): Promise<
+  { success: true; profile: UserProfile } | { success: false; error?: string }
+> {
+  const valid = await ensureValidToken();
+  if (!valid) return { success: false, error: '未登录' };
+
+  const accessToken = await getAccessToken();
+  if (!accessToken) return { success: false, error: '未登录' };
+
+  const settings = await getSettings();
+  const serverUrl = resolveServerUrl(settings.serverUrl);
+  if (!serverUrl) return { success: false, error: '服务器地址无效' };
+
+  try {
+    const res = await fetch(apiUrl(serverUrl, '/api/v1/me'), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      return { success: false, error: '获取用户信息失败' };
+    }
+
+    const data = (await res.json()) as {
+      referral: {
+        code: string;
+        valid_count_this_month: number;
+        upgrade_threshold: number;
+      };
+    };
+
+    return {
+      success: true,
+      profile: {
+        referralCode: data.referral.code,
+        validCountThisMonth: data.referral.valid_count_this_month,
+        upgradeThreshold: data.referral.upgrade_threshold,
+      },
+    };
   } catch {
     return { success: false, error: '无法连接服务器' };
   }

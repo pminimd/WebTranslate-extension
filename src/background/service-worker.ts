@@ -2,7 +2,7 @@ import type { RuntimeMessage } from '../shared/types.js';
 import { clearTokens, getAccessToken, getSettings, getTokens } from '../shared/auth.js';
 import { isContentScriptSender, isExtensionPageSender } from './message-auth.js';
 import { ensureContentScript, sendToTab } from './tab-utils.js';
-import { ensureValidToken, login, register, resendVerification, WebSocketClient } from './websocket-client.js';
+import { ensureValidToken, fetchUserProfile, login, register, resendVerification, WebSocketClient } from './websocket-client.js';
 
 const wsClient = new WebSocketClient();
 
@@ -103,6 +103,18 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendRespo
           isAuthenticated: !!(tokens && (await getAccessToken())),
           email: stored.user_email as string | undefined,
         } satisfies RuntimeMessage);
+      })();
+      return true;
+
+    case 'GET_USER_PROFILE':
+      if (!isExtensionPageSender(sender)) return false;
+      void (async () => {
+        const result = await fetchUserProfile();
+        sendResponse(
+          result.success
+            ? ({ type: 'USER_PROFILE_RESULT', success: true, profile: result.profile } satisfies RuntimeMessage)
+            : ({ type: 'USER_PROFILE_RESULT', success: false, error: result.error } satisfies RuntimeMessage)
+        );
       })();
       return true;
 

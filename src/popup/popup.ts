@@ -1,5 +1,6 @@
 import type { RuntimeMessage } from '../shared/types.js';
 import { getSettings, saveSettings } from '../shared/auth.js';
+import { buildReferralShareText, OFFICIAL_SITE_URL } from '../shared/config.js';
 import { validateServerUrl } from '../shared/server-url.js';
 
 const statusDot = document.getElementById('statusDot')!;
@@ -25,8 +26,18 @@ const resendBtn = document.getElementById('resendBtn') as HTMLButtonElement;
 const showRegisterBtn = document.getElementById('showRegisterBtn')!;
 const showLoginBtn = document.getElementById('showLoginBtn')!;
 const backToLoginBtn = document.getElementById('backToLoginBtn')!;
+const siteUrlInput = document.getElementById('siteUrl') as HTMLInputElement;
+const copySiteUrlBtn = document.getElementById('copySiteUrlBtn')!;
+const copySiteUrlLabel = document.getElementById('copySiteUrlLabel')!;
+const shareCard = document.getElementById('shareCard')!;
+const referralCard = document.getElementById('referralCard')!;
+const referralCodeDisplay = document.getElementById('referralCodeDisplay') as HTMLInputElement;
+const referralStats = document.getElementById('referralStats')!;
+const copyReferralBtn = document.getElementById('copyReferralBtn')!;
+const copyReferralLabel = document.getElementById('copyReferralLabel')!;
 
 let pendingVerifyEmail = '';
+let currentReferralCode = '';
 
 const STATUS_LABELS: Record<string, string> = {
   disconnected: '未连接',
@@ -97,6 +108,25 @@ async function refreshConnectionStatus(): Promise<void> {
   }
 }
 
+async function refreshReferralCard(): Promise<void> {
+  referralCard.classList.add('hidden');
+  currentReferralCode = '';
+
+  const response = await chrome.runtime.sendMessage({
+    type: 'GET_USER_PROFILE',
+  } satisfies RuntimeMessage) as RuntimeMessage;
+
+  if (response.type !== 'USER_PROFILE_RESULT' || !response.success || !response.profile) {
+    return;
+  }
+
+  const { referralCode, validCountThisMonth, upgradeThreshold } = response.profile;
+  currentReferralCode = referralCode;
+  referralCodeDisplay.value = referralCode;
+  referralStats.textContent = `好友注册时填写，本月已邀请 ${validCountThisMonth}/${upgradeThreshold} 人`;
+  referralCard.classList.remove('hidden');
+}
+
 async function refreshAuthUI(): Promise<void> {
   const response = await chrome.runtime.sendMessage({
     type: 'GET_AUTH_STATUS',
@@ -112,8 +142,11 @@ async function refreshAuthUI(): Promise<void> {
     loggedInView.classList.add('visible');
     hideAuthForms();
     userEmail.textContent = response.email ?? '已登录';
+    await refreshReferralCard();
   } else {
     loggedInView.classList.remove('visible');
+    referralCard.classList.add('hidden');
+    currentReferralCode = '';
     if (!verifyPendingView.classList.contains('visible')) {
       showLoginForm();
     }
@@ -245,6 +278,74 @@ serverUrlInput.addEventListener('change', async () => {
 logoutBtn.addEventListener('click', async () => {
   await chrome.runtime.sendMessage({ type: 'LOGOUT' } satisfies RuntimeMessage);
   await refreshAuthUI();
+});
+
+siteUrlInput.value = OFFICIAL_SITE_URL;
+
+const COPY_LABEL_DEFAULT = '复制链接分享';
+const COPY_LABEL_DONE = '已复制，去粘贴分享吧';
+
+async function copySiteUrl(): Promise<void> {
+  const url = OFFICIAL_SITE_URL;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch {
+    siteUrlInput.focus();
+    siteUrlInput.select();
+    document.execCommand('copy');
+  }
+
+  copySiteUrlLabel.textContent = COPY_LABEL_DONE;
+  copySiteUrlBtn.classList.add('copied');
+  shareCard.classList.add('copied');
+  window.setTimeout(() => {
+    copySiteUrlLabel.textContent = COPY_LABEL_DEFAULT;
+    copySiteUrlBtn.classList.remove('copied');
+    shareCard.classList.remove('copied');
+  }, 2000);
+}
+
+copySiteUrlBtn.addEventListener('click', () => {
+  void copySiteUrl();
+});
+
+siteUrlInput.addEventListener('click', () => {
+  siteUrlInput.select();
+  void copySiteUrl();
+});
+
+const REFERRAL_COPY_DEFAULT = '复制邀请信息';
+const REFERRAL_COPY_DONE = '已复制，去粘贴分享吧';
+
+async function copyReferralShare(): Promise<void> {
+  if (!currentReferralCode) return;
+
+  const text = buildReferralShareText(currentReferralCode);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    referralCodeDisplay.focus();
+    referralCodeDisplay.select();
+    document.execCommand('copy');
+  }
+
+  copyReferralLabel.textContent = REFERRAL_COPY_DONE;
+  copyReferralBtn.classList.add('copied');
+  referralCard.classList.add('copied');
+  window.setTimeout(() => {
+    copyReferralLabel.textContent = REFERRAL_COPY_DEFAULT;
+    copyReferralBtn.classList.remove('copied');
+    referralCard.classList.remove('copied');
+  }, 2000);
+}
+
+copyReferralBtn.addEventListener('click', () => {
+  void copyReferralShare();
+});
+
+referralCodeDisplay.addEventListener('click', () => {
+  referralCodeDisplay.select();
+  void copyReferralShare();
 });
 
 void refreshAuthUI();

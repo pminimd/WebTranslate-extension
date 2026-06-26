@@ -57,6 +57,13 @@ export type RuntimeMessage =
   | { type: 'RESEND_VERIFICATION'; email: string }
   | { type: 'LOGOUT' }
   | { type: 'GET_AUTH_STATUS' }
+  | { type: 'GET_USER_PROFILE' }
+  | {
+      type: 'USER_PROFILE_RESULT';
+      success: boolean;
+      profile?: UserProfile;
+      error?: string;
+    }
   | {
       type: 'TRANSLATION_UPDATE';
       requestId: string;
@@ -92,6 +99,12 @@ export interface UserSettings {
   targetLang: string;
   serverUrl: string;
   autoShowTrigger: boolean;
+}
+
+export interface UserProfile {
+  referralCode: string;
+  validCountThisMonth: number;
+  upgradeThreshold: number;
 }
 
 export interface LoginResponse {
