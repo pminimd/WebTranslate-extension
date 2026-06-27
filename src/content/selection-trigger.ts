@@ -3,6 +3,14 @@ import {
   MIN_SELECTION_LENGTH,
   SELECTION_DEBOUNCE_MS,
 } from '../shared/config.js';
+import {
+  getArxivHtmlUrl,
+  getPdfHintMessage,
+  isArxivHost,
+  isLikelyPdfTab,
+} from './page-context.js';
+import { PdfHintToast } from './pdf-hint.js';
+import { getRangeClientRect, normalizeSelectionText, rectToBounds } from './selection-utils.js';
 
 export type SelectionRect = {
   text: string;
@@ -24,6 +32,7 @@ export class SelectionTrigger {
   private host: HTMLElement | null = null;
   private lastSelection: SelectionRect | null = null;
   private onTranslate: ((selection: SelectionRect) => void) | null = null;
+  private pdfHint = new PdfHintToast();
 
   constructor(private onSelectionChange: SelectionCallback) {
     this.bindEvents();
@@ -39,6 +48,10 @@ export class SelectionTrigger {
     if (sel) {
       this.hideTrigger();
       this.onTranslate?.(sel);
+      return;
+    }
+    if (isLikelyPdfTab()) {
+      this.showPdfHint();
     }
   }
 
@@ -51,6 +64,7 @@ export class SelectionTrigger {
     this.host?.remove();
     this.host = null;
     this.triggerEl = null;
+    this.pdfHint.destroy();
   }
 
   private bindEvents(): void {
@@ -110,22 +124,25 @@ export class SelectionTrigger {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
 
-    const text = selection.toString().trim();
+    const text = normalizeSelectionText(selection.toString());
     if (text.length < MIN_SELECTION_LENGTH || text.length > MAX_SELECTION_LENGTH) return null;
 
     const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return null;
+    const rect = getRangeClientRect(range);
+    if (!rect) return null;
 
     return {
       text,
-      top: rect.top,
-      left: rect.left,
-      bottom: rect.bottom,
-      right: rect.right,
-      width: rect.width,
-      height: rect.height,
+      ...rectToBounds(rect),
     };
+  }
+
+  private showPdfHint(): void {
+    const linkUrl = isArxivHost() ? (getArxivHtmlUrl() ?? undefined) : undefined;
+    const message = isArxivHost()
+      ? 'arXiv PDF 页面无法直接选词翻译，请使用 HTML 版本。'
+      : getPdfHintMessage();
+    this.pdfHint.show(message, linkUrl);
   }
 
   private ensureTrigger(): HTMLButtonElement {
