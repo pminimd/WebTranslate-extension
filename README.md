@@ -4,7 +4,7 @@
 
 在网页上选中文字，一点就译。
 
-[官网](http://www.la-yee.com) · 当前版本 **v0.1.3**
+[官网](http://www.la-yee.com) · 当前版本 **v0.1.4**
 
 LA-YEE Web Translate 是一款浏览器翻译插件，支持 Chrome 和 Microsoft Edge。选中文字后，旁边会出现「翻译」按钮，译文流式显示在页面上，不用切标签、不用复制粘贴。
 
@@ -186,8 +186,8 @@ extension/
 推送版本 tag 后，GitHub Actions 会自动构建并发布安装包：
 
 ```bash
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 Release 中会附带 **`web-translate-vX.X.X.zip`**，解压后得到 `web-translate/` 文件夹，按上方「安装插件」步骤加载即可。

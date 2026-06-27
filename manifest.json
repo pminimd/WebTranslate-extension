@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Web Translate",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "选中即译 — 快速翻译网页文本",
   "icons": {
     "16": "icons/icon16.png",
